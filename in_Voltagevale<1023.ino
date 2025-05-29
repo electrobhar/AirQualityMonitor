@@ -7,28 +7,28 @@
 const int mq8Pin = A0;
 const int mq135Pin = A2;
 const int mq7Pin = A1;
-const int dhtPin = 7;            // DHT11 data pin
-const int pmsRX = 8;             // PMS5003 TX -> Arduino RX
-const int pmsTX = 9;             // PMS5003 RX -> Arduino TX
-const int btRX = 10;             // HC-05 TX -> Arduino RX
-const int btTX = 11;             // HC-05 RX -> Arduino TX
+const int dhtPin = 7;
+const int pmsRX = 8;
+const int pmsTX = 9;
+const int btRX = 10;
+const int btTX = 11;
 
-// DHT Sensor setup
+// DHT Sensor
 #define DHTTYPE DHT11
 DHT dht(dhtPin, DHTTYPE);
 
-// Bluetooth and PMS5003 Serial
+// Serial Interfaces
 SoftwareSerial bluetooth(btRX, btTX);
-SoftwareSerial pmsSerial(pmsRX, pmsTX); // RX, TX
+SoftwareSerial pmsSerial(pmsRX, pmsTX);
 
 // PMS5003 Data Buffer
 uint8_t pmsData[32];
 
-// Initialize LCD, common I2C address is 0x27, 16 columns, 2 rows
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// Initialize LCD: 20 columns, 4 rows
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 unsigned long previousMillis = 0;
-const long interval = 4000; // 4 seconds between screen switches
+const long interval = 4000;
 int screen = 0;
 
 void setup() {
@@ -46,25 +46,22 @@ void setup() {
 
   Serial.println("System Initialized.");
   bluetooth.println("System Initialized.");
+  lcd.setCursor(2, 1);
   lcd.print("System Initialized");
   delay(2000);
   lcd.clear();
 }
 
 void loop() {
-  // Read gas sensors
   int mq8Value = analogRead(mq8Pin);
   int mq135Value = analogRead(mq135Pin);
   int mq7Value = analogRead(mq7Pin);
 
-  // Read DHT11
   float temperature = dht.readTemperature();
   float humidity = dht.readHumidity();
 
-  // Read PMS5003 data
   String pmData = readPMS();
 
-  // Format all data
   String dataToSend = "MQ8: " + String(mq8Value) +
                       " | MQ135: " + String(mq135Value) +
                       " | MQ7: " + String(mq7Value) +
@@ -72,55 +69,60 @@ void loop() {
                       " | Humidity: " + String(humidity) + "%" +
                       " | " + pmData;
 
-  // Send data via Serial and Bluetooth
   Serial.println(dataToSend);
   bluetooth.println(dataToSend);
 
-  // Update LCD display with rotating info every 'interval' milliseconds
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     lcd.clear();
 
-    switch(screen) {
+    switch (screen) {
       case 0:
-        // Show temperature & humidity
+        // Temperature and Humidity
         lcd.setCursor(0, 0);
         lcd.print("Temp: ");
         lcd.print(temperature, 1);
-        lcd.print(" C");
+        lcd.print((char)223); // Degree symbol
+        lcd.print("C");
+
         lcd.setCursor(0, 1);
         lcd.print("Humidity: ");
         lcd.print(humidity, 1);
         lcd.print("%");
+
+        lcd.setCursor(0, 2);
+        lcd.print("MQ8: ");
+        lcd.print(mq8Value);
+        lcd.setCursor(10, 2);
+        lcd.print("MQ7: ");
+        lcd.print(mq7Value);
+
+        lcd.setCursor(0, 3);
+        lcd.print("MQ135: ");
+        lcd.print(mq135Value);
         break;
 
       case 1:
-        // Show gas sensor values
+        // PM data
         lcd.setCursor(0, 0);
-        lcd.print("MQ8:");
-        lcd.print(mq8Value);
-        lcd.print(" MQ135:");
-        // To fit in line, abbreviate MQ135 as M135
-        lcd.setCursor(0, 1);
-        lcd.print("MQ7:");
-        lcd.print(mq7Value);
-        break;
+        lcd.print("PMS5003 Readings:");
 
-      case 2:
-        // Show particulate matter data
-        // Example: PM1.0: 12 PM2.5: 20
-        lcd.setCursor(0, 0);
-        lcd.print(pmData.substring(0,16)); // first 16 chars
         lcd.setCursor(0, 1);
-        if (pmData.length() > 16) {
-          lcd.print(pmData.substring(16,32)); // next 16 chars if available
+        lcd.print(pmData.substring(0, 20)); // PM1.0 and PM2.5
+
+        if (pmData.length() > 20) {
+          lcd.setCursor(0, 2);
+          lcd.print(pmData.substring(20, 40)); // PM10 or rest
         }
+
+        lcd.setCursor(0, 3);
+        lcd.print("Reading updated...");
         break;
     }
 
     screen++;
-    if (screen > 2) screen = 0;
+    if (screen > 1) screen = 0;
   }
 
   delay(200);
@@ -139,10 +141,10 @@ String readPMS() {
       uint16_t pm10_standard = (pmsData[10] << 8) | pmsData[11];
       uint16_t pm25_standard = (pmsData[12] << 8) | pmsData[13];
       uint16_t pm100_standard = (pmsData[14] << 8) | pmsData[15];
+      delay(4000); //make some delay to getting enough time to accurately work the sensor
 
       return "PM1.0:" + String(pm10_standard) + " PM2.5:" + String(pm25_standard) + " PM10:" + String(pm100_standard);
     }
   }
   return "PM: N/A";
 }
- 
